@@ -1,11 +1,25 @@
+import { IsEnum, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { TaskStatus } from '../enums/task-status.enum';
 import { TaskPriority } from '../enums/task-priority.enum';
+import { PaginationDto } from '../../../common/dto/pagination.dto';
 
-// TODO: Implement task filtering DTO
-// This DTO should be used to filter tasks by status, priority, etc.
-export class TaskFilterDto {
-  // TODO: Add properties for filtering tasks
-  // Example: status, priority, userId, search query, date ranges, etc.
-  // Add appropriate decorators for validation and Swagger documentation
-} 
+export class TaskFilterDto extends PaginationDto {
+  @ApiProperty({
+    enum: TaskStatus,
+    required: false,
+    description: 'Filter by task status',
+  })
+  @IsOptional()
+  @IsEnum(TaskStatus)
+  status?: TaskStatus;
+
+  @ApiProperty({
+    enum: TaskPriority,
+    required: false,
+    description: 'Filter by task priority',
+  })
+  @IsOptional()
+  @IsEnum(TaskPriority)
+  priority?: TaskPriority;
+}

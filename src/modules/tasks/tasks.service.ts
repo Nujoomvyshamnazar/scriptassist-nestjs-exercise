@@ -4,10 +4,12 @@ import { Repository } from 'typeorm';
 import { Task } from './entities/task.entity';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import { TaskFilterDto } from './dto/task-filter.dto';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { TaskStatus } from './enums/task-status.enum';
 import { User } from '../users/entities/user.entity';
+import { PaginatedResponse } from '../../common/interfaces/paginated-response.interface';
 
 @Injectable()
 export class TasksService {
@@ -44,12 +46,39 @@ export class TasksService {
     return savedTask;
   }
 
-  async findAll(): Promise<Task[]> {
-    // Inefficient implementation: retrieves all tasks without pagination
-    // and loads all relations, causing potential performance issues
-    return this.tasksRepository.find({
-      relations: ['user'],
-    });
+  async findAll(filterDto?: TaskFilterDto): Promise<PaginatedResponse<Task>> {
+    const { page = 1, limit = 10, status, priority } = filterDto || {};
+
+    // Build query with QueryBuilder for efficient database-level pagination
+    const queryBuilder = this.tasksRepository
+      .createQueryBuilder('task')
+      .leftJoinAndSelect('task.user', 'user');
+
+    // Apply filters
+    if (status) {
+      queryBuilder.andWhere('task.status = :status', { status });
+    }
+
+    if (priority) {
+      queryBuilder.andWhere('task.priority = :priority', { priority });
+    }
+
+    // Apply pagination
+    const skip = (page - 1) * limit;
+    queryBuilder.skip(skip).take(limit);
+
+    // Execute query with count
+    const [data, total] = await queryBuilder.getManyAndCount();
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async findOne(id: string): Promise<Task> {
