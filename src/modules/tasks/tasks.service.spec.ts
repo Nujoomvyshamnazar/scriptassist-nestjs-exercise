@@ -24,7 +24,7 @@ describe('TasksService', () => {
     priority: TaskPriority.MEDIUM,
     dueDate: new Date('2025-12-31'),
     userId: 'user1',
-    user: null,
+    user: undefined as any,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -112,7 +112,7 @@ describe('TasksService', () => {
       usersRepository.findOne.mockResolvedValue(mockUser);
       tasksRepository.create.mockReturnValue(mockTask);
       tasksRepository.save.mockResolvedValue(mockTask);
-      taskQueue.add.mockResolvedValue(null);
+      taskQueue.add.mockResolvedValue({} as any);
 
       const result = await service.create(createTaskDto);
 
