@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { TasksService } from '../../modules/tasks/tasks.service';
 
@@ -12,29 +12,57 @@ export class TaskProcessorService extends WorkerHost {
     super();
   }
 
-  // Inefficient implementation:
-  // - No proper job batching
-  // - No error handling strategy
-  // - No retries for failed jobs
-  // - No concurrency control
   async process(job: Job): Promise<any> {
-    this.logger.debug(`Processing job ${job.id} of type ${job.name}`);
-    
+    const attemptInfo = `(attempt ${job.attemptsMade + 1}/${job.opts.attempts || 1})`;
+    this.logger.debug(`Processing job ${job.id} of type ${job.name} ${attemptInfo}`);
+
     try {
+      let result;
+
       switch (job.name) {
         case 'task-status-update':
-          return await this.handleStatusUpdate(job);
+          result = await this.handleStatusUpdate(job);
+          break;
         case 'overdue-tasks-notification':
-          return await this.handleOverdueTasks(job);
+          result = await this.handleOverdueTasks(job);
+          break;
         default:
           this.logger.warn(`Unknown job type: ${job.name}`);
           return { success: false, error: 'Unknown job type' };
       }
+
+      this.logger.log(`Successfully processed job ${job.id} ${attemptInfo}`);
+      return result;
+
     } catch (error) {
-      // Basic error logging without proper handling or retries
-      this.logger.error(`Error processing job ${job.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      throw error; // Simply rethrows the error without any retry strategy
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Error processing job ${job.id} ${attemptInfo}: ${errorMessage}`);
+
+      // Check if we should retry
+      const attemptsLeft = (job.opts.attempts || 1) - (job.attemptsMade + 1);
+      if (attemptsLeft > 0) {
+        this.logger.warn(`Job ${job.id} will be retried. Attempts left: ${attemptsLeft}`);
+      } else {
+        this.logger.error(`Job ${job.id} failed after all retry attempts`);
+      }
+
+      throw error; // Re-throw to trigger retry mechanism
     }
+  }
+
+  @OnWorkerEvent('completed')
+  onCompleted(job: Job) {
+    this.logger.log(`Job ${job.id} completed successfully`);
+  }
+
+  @OnWorkerEvent('failed')
+  onFailed(job: Job, error: Error) {
+    this.logger.error(`Job ${job.id} failed permanently: ${error.message}`);
+  }
+
+  @OnWorkerEvent('active')
+  onActive(job: Job) {
+    this.logger.debug(`Job ${job.id} is now active`);
   }
 
   private async handleStatusUpdate(job: Job) {
