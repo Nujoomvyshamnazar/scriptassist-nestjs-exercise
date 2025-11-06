@@ -5,6 +5,7 @@ import { Task } from './entities/task.entity';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TaskFilterDto } from './dto/task-filter.dto';
+import { BatchOperationDto, BatchAction } from './dto/batch-operation.dto';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { TaskStatus } from './enums/task-status.enum';
@@ -187,5 +188,52 @@ export class TasksService {
     });
 
     return stats;
+  }
+
+  async batchProcess(batchOperationDto: BatchOperationDto) {
+    const { tasks: taskIds, action } = batchOperationDto;
+    const results = [];
+
+    for (const taskId of taskIds) {
+      try {
+        let result;
+
+        if (action === BatchAction.COMPLETE) {
+          // Update task status to COMPLETED
+          const task = await this.findOne(taskId);
+          task.status = TaskStatus.COMPLETED;
+          result = await this.tasksRepository.save(task);
+
+          // Add to queue for status update
+          await this.taskQueue.add('task-status-update', {
+            taskId: task.id,
+            status: task.status,
+          });
+        } else if (action === BatchAction.DELETE) {
+          // Delete the task
+          await this.remove(taskId);
+          result = { id: taskId, deleted: true };
+        }
+
+        results.push({
+          taskId,
+          success: true,
+          result,
+        });
+      } catch (error) {
+        results.push({
+          taskId,
+          success: false,
+          error: error.message,
+        });
+      }
+    }
+
+    return {
+      processed: taskIds.length,
+      successful: results.filter(r => r.success).length,
+      failed: results.filter(r => !r.success).length,
+      results,
+    };
   }
 }
