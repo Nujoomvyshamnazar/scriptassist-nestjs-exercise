@@ -9,6 +9,7 @@ import { TasksModule } from './modules/tasks/tasks.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { TaskProcessorModule } from './queues/task-processor/task-processor.module';
 import { ScheduledTasksModule } from './queues/scheduled-tasks/scheduled-tasks.module';
+import { HealthModule } from './health/health.module';
 import { CacheService } from './common/services/cache.service';
 import { RedisThrottlerStorage } from './common/storage/redis-throttler.storage';
 import jwtConfig from './config/jwt.config';
@@ -76,7 +77,8 @@ import bullConfig from './config/bull.config';
     UsersModule,
     TasksModule,
     AuthModule,
-    
+    HealthModule,
+
     // Queue processing modules
     TaskProcessorModule,
     ScheduledTasksModule,
