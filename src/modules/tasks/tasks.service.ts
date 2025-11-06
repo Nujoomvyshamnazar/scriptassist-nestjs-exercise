@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Task } from './entities/task.entity';
@@ -7,17 +7,29 @@ import { UpdateTaskDto } from './dto/update-task.dto';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { TaskStatus } from './enums/task-status.enum';
+import { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class TasksService {
   constructor(
     @InjectRepository(Task)
     private tasksRepository: Repository<Task>,
+    @InjectRepository(User)
+    private usersRepository: Repository<User>,
     @InjectQueue('task-processing')
     private taskQueue: Queue,
   ) {}
 
   async create(createTaskDto: CreateTaskDto): Promise<Task> {
+    // Validate that the user exists
+    const userExists = await this.usersRepository.findOne({
+      where: { id: createTaskDto.userId },
+    });
+
+    if (!userExists) {
+      throw new BadRequestException(`User with ID ${createTaskDto.userId} not found`);
+    }
+
     // Inefficient implementation: creates the task but doesn't use a single transaction
     // for creating and adding to queue, potential for inconsistent state
     const task = this.tasksRepository.create(createTaskDto);
