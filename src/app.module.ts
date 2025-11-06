@@ -10,6 +10,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { TaskProcessorModule } from './queues/task-processor/task-processor.module';
 import { ScheduledTasksModule } from './queues/scheduled-tasks/scheduled-tasks.module';
 import { CacheService } from './common/services/cache.service';
+import { RedisThrottlerStorage } from './common/storage/redis-throttler.storage';
 import jwtConfig from './config/jwt.config';
 import databaseConfig from './config/database.config';
 import appConfig from './config/app.config';
@@ -55,16 +56,20 @@ import bullConfig from './config/bull.config';
       }),
     }),
     
-    // Rate limiting
+    // Rate limiting with Redis storage for distributed systems
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ([
-        {
-          ttl: 60,
-          limit: 10,
-        },
-      ]),
+      useFactory: (configService: ConfigService) => ({
+        throttlers: [
+          {
+            name: 'default',
+            ttl: 60000, // 60 seconds
+            limit: 100, // 100 requests per minute
+          },
+        ],
+        storage: new RedisThrottlerStorage(configService),
+      }),
     }),
     
     // Feature modules
