@@ -10,12 +10,17 @@ import { AuthModule } from './modules/auth/auth.module';
 import { TaskProcessorModule } from './queues/task-processor/task-processor.module';
 import { ScheduledTasksModule } from './queues/scheduled-tasks/scheduled-tasks.module';
 import { CacheService } from './common/services/cache.service';
+import jwtConfig from './config/jwt.config';
+import databaseConfig from './config/database.config';
+import appConfig from './config/app.config';
+import bullConfig from './config/bull.config';
 
 @Module({
   imports: [
     // Configuration
     ConfigModule.forRoot({
       isGlobal: true,
+      load: [jwtConfig, databaseConfig, appConfig, bullConfig],
     }),
     
     // Database
