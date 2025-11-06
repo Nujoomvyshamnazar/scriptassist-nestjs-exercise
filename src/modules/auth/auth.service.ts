@@ -81,6 +81,18 @@ export class AuthService {
   }
 
   async validateUserRoles(userId: string, requiredRoles: string[]): Promise<boolean> {
-    return true;
+    // Validate user exists and has required roles
+    const user = await this.usersService.findOne(userId);
+
+    if (!user) {
+      return false;
+    }
+
+    // Check if user has any of the required roles
+    if (!requiredRoles || requiredRoles.length === 0) {
+      return true; // No specific roles required
+    }
+
+    return requiredRoles.includes(user.role);
   }
 } 
