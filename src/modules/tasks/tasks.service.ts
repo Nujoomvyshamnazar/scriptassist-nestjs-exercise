@@ -140,4 +140,52 @@ export class TasksService {
     task.status = status as any;
     return this.tasksRepository.save(task);
   }
+
+  async getStats() {
+    // Efficient implementation: Single SQL query with GROUP BY aggregation
+    const statusStats = await this.tasksRepository
+      .createQueryBuilder('task')
+      .select('task.status', 'status')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('task.status')
+      .getRawMany();
+
+    const priorityStats = await this.tasksRepository
+      .createQueryBuilder('task')
+      .select('task.priority', 'priority')
+      .addSelect('COUNT(*)', 'count')
+      .groupBy('task.priority')
+      .getRawMany();
+
+    const total = await this.tasksRepository.count();
+
+    // Transform results into a more readable format
+    const stats = {
+      total,
+      completed: 0,
+      inProgress: 0,
+      pending: 0,
+      highPriority: 0,
+    };
+
+    statusStats.forEach((stat) => {
+      const count = parseInt(stat.count, 10);
+      if (stat.status === TaskStatus.COMPLETED) {
+        stats.completed = count;
+      } else if (stat.status === TaskStatus.IN_PROGRESS) {
+        stats.inProgress = count;
+      } else if (stat.status === TaskStatus.PENDING) {
+        stats.pending = count;
+      }
+    });
+
+    priorityStats.forEach((stat) => {
+      const count = parseInt(stat.count, 10);
+      if (stat.priority === 'HIGH') {
+        stats.highPriority = count;
+      }
+    });
+
+    return stats;
+  }
 }
