@@ -224,7 +224,7 @@ export class TasksService {
         results.push({
           taskId,
           success: false,
-          error: error.message,
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     }

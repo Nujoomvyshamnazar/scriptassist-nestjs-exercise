@@ -28,7 +28,7 @@ export class UsersService {
 
     try {
       return await this.usersRepository.save(user);
-    } catch (error) {
+    } catch (error: any) {
       // Handle unique constraint violation
       if (error.code === '23505') {
         throw new ConflictException('Email already exists');
@@ -72,7 +72,7 @@ export class UsersService {
 
     try {
       return await this.usersRepository.save(user);
-    } catch (error) {
+    } catch (error: any) {
       // Handle unique constraint violation
       if (error.code === '23505') {
         throw new ConflictException('Email already exists');
