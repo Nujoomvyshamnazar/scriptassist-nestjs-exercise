@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
@@ -14,12 +14,27 @@ export class UsersService {
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
+    // Check if email already exists
+    const existingUser = await this.findByEmail(createUserDto.email);
+    if (existingUser) {
+      throw new ConflictException('Email already exists');
+    }
+
     const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
     const user = this.usersRepository.create({
       ...createUserDto,
       password: hashedPassword,
     });
-    return this.usersRepository.save(user);
+
+    try {
+      return await this.usersRepository.save(user);
+    } catch (error) {
+      // Handle unique constraint violation
+      if (error.code === '23505') {
+        throw new ConflictException('Email already exists');
+      }
+      throw error;
+    }
   }
 
   findAll(): Promise<User[]> {
@@ -40,13 +55,30 @@ export class UsersService {
 
   async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
     const user = await this.findOne(id);
-    
+
+    // Check if email is being updated and if it already exists
+    if (updateUserDto.email && updateUserDto.email !== user.email) {
+      const existingUser = await this.findByEmail(updateUserDto.email);
+      if (existingUser) {
+        throw new ConflictException('Email already exists');
+      }
+    }
+
     if (updateUserDto.password) {
       updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
     }
-    
+
     this.usersRepository.merge(user, updateUserDto);
-    return this.usersRepository.save(user);
+
+    try {
+      return await this.usersRepository.save(user);
+    } catch (error) {
+      // Handle unique constraint violation
+      if (error.code === '23505') {
+        throw new ConflictException('Email already exists');
+      }
+      throw error;
+    }
   }
 
   async remove(id: string): Promise<void> {
