@@ -881,15 +881,6 @@ The application is designed for horizontal scaling:
 
 ---
 
-## Contributing
-
-This project follows standard Git workflow:
-
-1. Create feature branch from `main`
-2. Make focused commits with descriptive messages
-3. Ensure all tests pass
-4. Submit pull request with detailed description
-   
 
 ## Acknowledgments
 

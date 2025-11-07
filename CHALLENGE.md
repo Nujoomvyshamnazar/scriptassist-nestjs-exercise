@@ -915,19 +915,7 @@ This project follows standard Git workflow:
 
 Types: `feat`, `fix`, `refactor`, `test`, `perf`, `docs`, `chore`
 
----
 
-## License
-
-MIT License - See LICENSE file for details
-
----
-
-## Contact
-
-For questions or feedback, please open an issue in the repository.
-
----
 
 ## Acknowledgments
 
