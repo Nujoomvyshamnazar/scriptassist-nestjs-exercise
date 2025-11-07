@@ -917,18 +917,6 @@ Types: `feat`, `fix`, `refactor`, `test`, `perf`, `docs`, `chore`
 
 ---
 
-## License
-
-MIT License - See LICENSE file for details
-
----
-
-## Contact
-
-For questions or feedback, please open an issue in the repository.
-
----
-
 ## Acknowledgments
 
 This project demonstrates production-ready practices for building scalable, secure, and maintainable NestJS applications. The implementation addresses real-world challenges in distributed systems, performance optimization, and security hardening.
