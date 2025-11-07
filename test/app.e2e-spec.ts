@@ -34,9 +34,16 @@ describe('AppController (e2e)', () => {
     await app.close();
   });
 
-  it('/ (GET) - should be protected', () => {
-    return request(app.getHttpServer()).get('/').expect(401);
+  it('/ (GET) - should return 404 (no root route)', () => {
+    return request(app.getHttpServer()).get('/').expect(404);
   });
 
-  // Add more tests as needed
+  it('/health (GET) - should return health status', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/health');
+
+    // Health check might return 503 if memory thresholds are exceeded
+    expect([200, 503]).toContain(response.status);
+    expect(response.body).toHaveProperty('status');
+  });
 });

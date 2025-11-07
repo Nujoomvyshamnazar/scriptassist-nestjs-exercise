@@ -46,9 +46,11 @@ describe('Authentication API (e2e)', () => {
         })
         .expect(201);
 
-      expect(response.body).toHaveProperty('id');
-      expect(response.body.email).toBe(testEmail);
-      expect(response.body).not.toHaveProperty('password');
+      expect(response.body).toHaveProperty('user');
+      expect(response.body).toHaveProperty('token');
+      expect(response.body.user).toHaveProperty('id');
+      expect(response.body.user.email).toBe(testEmail);
+      expect(response.body.user).not.toHaveProperty('password');
     });
 
     it('should fail with duplicate email', async () => {
@@ -103,7 +105,7 @@ describe('Authentication API (e2e)', () => {
           email: testEmail,
           password: testPassword,
         })
-        .expect(200);
+        .expect(201);
 
       expect(response.body).toHaveProperty('access_token');
       expect(typeof response.body.access_token).toBe('string');

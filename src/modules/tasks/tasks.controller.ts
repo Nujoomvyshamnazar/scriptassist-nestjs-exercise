@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, HttpException, HttpStatus, HttpCode } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { TasksService } from './tasks.service';
 import { CreateTaskDto } from './dto/create-task.dto';
@@ -70,6 +70,7 @@ export class TasksController {
   }
 
   @Post('batch')
+  @HttpCode(200)
   @ApiOperation({ summary: 'Batch process multiple tasks' })
   async batchProcess(@Body() batchOperationDto: BatchOperationDto) {
     return this.tasksService.batchProcess(batchOperationDto);
