@@ -881,21 +881,6 @@ The application is designed for horizontal scaling:
 
 ---
 
-## Future Enhancements
-
-Potential improvements for future iterations:
-
-1. **Caching Layer**: Implement Redis caching for frequently accessed data
-2. **Event Sourcing**: Add event sourcing for audit trail and temporal queries
-3. **WebSocket Support**: Real-time task updates using Socket.io
-4. **Advanced Search**: Full-text search with Elasticsearch
-5. **Metrics and Monitoring**: Prometheus metrics and Grafana dashboards
-6. **Circuit Breakers**: Implement circuit breakers for external service calls
-7. **API Versioning**: Support multiple API versions for backward compatibility
-8. **Soft Deletes**: Implement soft delete pattern for data recovery
-
----
-
 ## Contributing
 
 This project follows standard Git workflow:
@@ -904,18 +889,7 @@ This project follows standard Git workflow:
 2. Make focused commits with descriptive messages
 3. Ensure all tests pass
 4. Submit pull request with detailed description
-
-### Commit Message Convention
-
-```
-<type>: <subject>
-
-<body>
-```
-
-Types: `feat`, `fix`, `refactor`, `test`, `perf`, `docs`, `chore`
-
----
+   
 
 ## Acknowledgments
 
