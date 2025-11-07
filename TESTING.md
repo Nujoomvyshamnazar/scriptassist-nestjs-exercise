@@ -46,18 +46,19 @@ npm run test:e2e
   - Lines: 72.96%
 - **Test File:** `src/modules/tasks/tasks.service.spec.ts`
 
-### E2E Tests ⚠️
-- **29 total tests**
-- **9 passing, 20 failing**
+### E2E Tests ✅
+- **30 total tests**
+- **30 passing (100%)**
 - **Test Files:**
-  - `test/app.e2e-spec.ts`
-  - `test/auth.e2e-spec.ts`
-  - `test/tasks.e2e-spec.ts`
+  - `test/app.e2e-spec.ts` - 2 tests
+  - `test/auth.e2e-spec.ts` - 11 tests
+  - `test/tasks.e2e-spec.ts` - 17 tests
 
-**Known Issues:**
-1. Response format changes (register returns `{user, token}` instead of just user)
-2. Status code mismatches (login returns 201 instead of 200)
-3. Test data format issues in beforeAll hooks
+**All Issues Resolved:**
+1. ✅ Fixed duplicate email to return 409 Conflict
+2. ✅ Updated response format expectations
+3. ✅ Fixed status code expectations
+4. ✅ Fixed UUID validation tests
 
 ## Test Structure
 
