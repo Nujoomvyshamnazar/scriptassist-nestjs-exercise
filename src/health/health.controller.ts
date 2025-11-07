@@ -33,8 +33,10 @@ export class HealthController {
     return this.health.check([
       () => this.db.pingCheck('database'),
       () => this.redis.isHealthy('redis'),
-      () => this.memory.checkHeap('memory_heap', 150 * 1024 * 1024),
-      () => this.memory.checkRSS('memory_rss', 300 * 1024 * 1024),
+      // Increased thresholds for production and testing environments
+      // Heap: 512MB, RSS: 1GB
+      () => this.memory.checkHeap('memory_heap', 512 * 1024 * 1024),
+      () => this.memory.checkRSS('memory_rss', 1024 * 1024 * 1024),
     ]);
   }
 

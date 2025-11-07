@@ -40,10 +40,13 @@ describe('AppController (e2e)', () => {
 
   it('/health (GET) - should return health status', async () => {
     const response = await request(app.getHttpServer())
-      .get('/health');
+      .get('/health')
+      .expect(200);
 
-    // Health check might return 503 if memory thresholds are exceeded
-    expect([200, 503]).toContain(response.status);
     expect(response.body).toHaveProperty('status');
+    expect(response.body.status).toBe('ok');
+    expect(response.body).toHaveProperty('info');
+    expect(response.body.info).toHaveProperty('database');
+    expect(response.body.info).toHaveProperty('redis');
   });
 });
