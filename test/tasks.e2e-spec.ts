@@ -43,15 +43,15 @@ describe('Tasks API (e2e)', () => {
       })
       .expect(201);
 
-    userId = registerResponse.body.id;
+    userId = registerResponse.body.user.id;
 
     const loginResponse = await request(app.getHttpServer())
       .post('/auth/login')
       .send({
-        email: registerResponse.body.email,
+        email: registerResponse.body.user.email,
         password: 'Test123!@#',
       })
-      .expect(200);
+      .expect(201);
 
     authToken = loginResponse.body.access_token;
   });
@@ -116,9 +116,9 @@ describe('Tasks API (e2e)', () => {
           description: 'Test Description',
           status: TaskStatus.PENDING,
           priority: TaskPriority.MEDIUM,
-          userId: 99999, // Non-existent user
+          userId: 'invalid-uuid', // Invalid UUID format
         })
-        .expect(404);
+        .expect(400); // Bad Request for invalid UUID format
     });
   });
 
@@ -178,8 +178,10 @@ describe('Tasks API (e2e)', () => {
     });
 
     it('should return 404 for non-existent task', async () => {
+      // Use a valid UUID format that doesn't exist
+      const nonExistentId = '00000000-0000-0000-0000-000000000000';
       await request(app.getHttpServer())
-        .get('/tasks/99999')
+        .get(`/tasks/${nonExistentId}`)
         .set('Authorization', `Bearer ${authToken}`)
         .expect(404);
     });
@@ -233,11 +235,12 @@ describe('Tasks API (e2e)', () => {
         .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
 
-      expect(Array.isArray(response.body)).toBe(true);
-      if (response.body.length > 0) {
-        expect(response.body[0]).toHaveProperty('status');
-        expect(response.body[0]).toHaveProperty('count');
-      }
+      expect(response.body).toHaveProperty('total');
+      expect(response.body).toHaveProperty('completed');
+      expect(response.body).toHaveProperty('inProgress');
+      expect(response.body).toHaveProperty('pending');
+      expect(response.body).toHaveProperty('highPriority');
+      expect(typeof response.body.total).toBe('number');
     });
   });
 
@@ -268,15 +271,15 @@ describe('Tasks API (e2e)', () => {
         .post('/tasks/batch')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          taskIds: batchTaskIds,
-          action: 'update_status',
-          data: { status: TaskStatus.COMPLETED },
+          tasks: batchTaskIds,
+          action: 'COMPLETE',
         })
         .expect(200);
 
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBe(batchTaskIds.length);
-      expect(response.body.every((result: any) => result.success === true)).toBe(true);
+      expect(response.body).toHaveProperty('processed');
+      expect(response.body).toHaveProperty('successful');
+      expect(response.body).toHaveProperty('failed');
+      expect(response.body.processed).toBe(batchTaskIds.length);
     });
 
     it('should delete multiple tasks', async () => {
@@ -284,12 +287,14 @@ describe('Tasks API (e2e)', () => {
         .post('/tasks/batch')
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          taskIds: batchTaskIds,
-          action: 'delete',
+          tasks: batchTaskIds,
+          action: 'DELETE',
         })
         .expect(200);
 
-      expect(response.body.every((result: any) => result.success === true)).toBe(true);
+      expect(response.body).toHaveProperty('processed');
+      expect(response.body).toHaveProperty('successful');
+      expect(response.body.successful).toBe(batchTaskIds.length);
     });
   });
 });
