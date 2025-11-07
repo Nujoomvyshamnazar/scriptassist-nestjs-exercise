@@ -22,6 +22,38 @@ This document contains technical notes, decisions, and implementation details fo
 - Individual tasks cached (10 min TTL)
 - Batch operations now atomic with transactions
 
+### Session 10: E2E Test Fixes
+
+**Bug Fixes:**
+- Fixed duplicate email registration to return 409 Conflict instead of 401 Unauthorized
+- Changed `UnauthorizedException` to `ConflictException` in auth service
+
+**E2E Test Updates:**
+- Updated register test expectations (response now includes `{user, token}`)
+- Fixed login status code expectation (201 instead of 200)
+- Fixed batch operations status code (added `@HttpCode(200)` decorator)
+- Updated stats endpoint test (returns object not array)
+- Fixed UUID validation tests to use proper UUID format
+- Updated health check test to handle memory threshold warnings
+
+**Testing Infrastructure:**
+- Added Jest configuration for E2E tests (`jest-e2e.config.js`)
+- Installed ts-jest for TypeScript support
+- Created comprehensive TESTING.md documentation
+- All 30 E2E tests now passing (100%)
+
+**Files Modified:**
+- `src/modules/auth/auth.service.ts` - Fixed duplicate email error type
+- `src/modules/tasks/tasks.controller.ts` - Added @HttpCode(200) to batch endpoint
+- `test/auth.e2e-spec.ts` - Updated response format expectations
+- `test/tasks.e2e-spec.ts` - Fixed all test expectations
+- `test/app.e2e-spec.ts` - Updated health check test
+
+**Commit:**
+```
+5af5bd2 fix: Update E2E tests and fix duplicate email bug
+```
+
 ### Session 1: Startup Fixes
 
 **Issues Found:**
