@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { Task } from './entities/task.entity';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -11,6 +11,7 @@ import { Queue } from 'bullmq';
 import { TaskStatus } from './enums/task-status.enum';
 import { User } from '../users/entities/user.entity';
 import { PaginatedResponse } from '../../common/interfaces/paginated-response.interface';
+import { CacheService } from '../../common/cache/cache.service';
 
 @Injectable()
 export class TasksService {
@@ -21,10 +22,11 @@ export class TasksService {
     private usersRepository: Repository<User>,
     @InjectQueue('task-processing')
     private taskQueue: Queue,
+    private cacheService: CacheService,
+    private dataSource: DataSource,
   ) {}
 
   async create(createTaskDto: CreateTaskDto): Promise<Task> {
-    // Validate that the user exists
     const userExists = await this.usersRepository.findOne({
       where: { id: createTaskDto.userId },
     });
@@ -33,22 +35,36 @@ export class TasksService {
       throw new BadRequestException(`User with ID ${createTaskDto.userId} not found`);
     }
 
-    // Inefficient implementation: creates the task but doesn't use a single transaction
-    // for creating and adding to queue, potential for inconsistent state
     const task = this.tasksRepository.create(createTaskDto);
     const savedTask = await this.tasksRepository.save(task);
 
-    // Add to queue without waiting for confirmation or handling errors
-    this.taskQueue.add('task-status-update', {
+    await this.taskQueue.add('task-status-update', {
       taskId: savedTask.id,
       status: savedTask.status,
     });
+
+    // Invalidate cache for this user
+    await this.cacheService.invalidateUserCache(createTaskDto.userId);
 
     return savedTask;
   }
 
   async findAll(filterDto?: TaskFilterDto): Promise<PaginatedResponse<Task>> {
     const { page = 1, limit = 10, status, priority } = filterDto || {};
+
+    // Generate cache key based on filters
+    const cacheKey = this.cacheService.generateCacheKey('tasks:list', {
+      page,
+      limit,
+      status: status || 'all',
+      priority: priority || 'all',
+    });
+
+    // Try to get from cache
+    const cached = await this.cacheService.get<PaginatedResponse<Task>>(cacheKey);
+    if (cached) {
+      return cached;
+    }
 
     // Build query with QueryBuilder for efficient database-level pagination
     const queryBuilder = this.tasksRepository
@@ -71,7 +87,7 @@ export class TasksService {
     // Execute query with count
     const [data, total] = await queryBuilder.getManyAndCount();
 
-    return {
+    const result = {
       data,
       meta: {
         total,
@@ -80,30 +96,41 @@ export class TasksService {
         totalPages: Math.ceil(total / limit),
       },
     };
+
+    // Cache the result for 5 minutes
+    await this.cacheService.set(cacheKey, result, 300);
+
+    return result;
   }
 
   async findOne(id: string): Promise<Task> {
-    // Inefficient implementation: two separate database calls
-    const count = await this.tasksRepository.count({ where: { id } });
+    // Try cache first
+    const cacheKey = `tasks:${id}`;
+    const cached = await this.cacheService.get<Task>(cacheKey);
+    if (cached) {
+      return cached;
+    }
 
-    if (count === 0) {
+    const task = await this.tasksRepository.findOne({
+      where: { id },
+      relations: ['user'],
+    });
+
+    if (!task) {
       throw new NotFoundException(`Task with ID ${id} not found`);
     }
 
-    return (await this.tasksRepository.findOne({
-      where: { id },
-      relations: ['user'],
-    })) as Task;
+    // Cache for 10 minutes
+    await this.cacheService.set(cacheKey, task, 600);
+
+    return task;
   }
 
   async update(id: string, updateTaskDto: UpdateTaskDto): Promise<Task> {
-    // Inefficient implementation: multiple database calls
-    // and no transaction handling
     const task = await this.findOne(id);
 
     const originalStatus = task.status;
 
-    // Directly update each field individually
     if (updateTaskDto.title) task.title = updateTaskDto.title;
     if (updateTaskDto.description) task.description = updateTaskDto.description;
     if (updateTaskDto.status) task.status = updateTaskDto.status;
@@ -112,21 +139,25 @@ export class TasksService {
 
     const updatedTask = await this.tasksRepository.save(task);
 
-    // Add to queue if status changed, but without proper error handling
     if (originalStatus !== updatedTask.status) {
-      this.taskQueue.add('task-status-update', {
+      await this.taskQueue.add('task-status-update', {
         taskId: updatedTask.id,
         status: updatedTask.status,
       });
     }
 
+    // Invalidate cache
+    await this.cacheService.invalidateTaskCache(id, task.userId);
+
     return updatedTask;
   }
 
   async remove(id: string): Promise<void> {
-    // Inefficient implementation: two separate database calls
     const task = await this.findOne(id);
     await this.tasksRepository.remove(task);
+
+    // Invalidate cache
+    await this.cacheService.invalidateTaskCache(id, task.userId);
   }
 
   async findByStatus(status: TaskStatus): Promise<Task[]> {
@@ -143,6 +174,13 @@ export class TasksService {
   }
 
   async getStats() {
+    // Try cache first
+    const cacheKey = 'tasks:stats';
+    const cached = await this.cacheService.get<any>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     // Efficient implementation: Single SQL query with GROUP BY aggregation
     const statusStats = await this.tasksRepository
       .createQueryBuilder('task')
@@ -160,7 +198,6 @@ export class TasksService {
 
     const total = await this.tasksRepository.count();
 
-    // Transform results into a more readable format
     const stats = {
       total,
       completed: 0,
@@ -187,53 +224,81 @@ export class TasksService {
       }
     });
 
+    // Cache for 2 minutes
+    await this.cacheService.set(cacheKey, stats, 120);
+
     return stats;
   }
 
   async batchProcess(batchOperationDto: BatchOperationDto) {
     const { tasks: taskIds, action } = batchOperationDto;
-    const results = [];
 
-    for (const taskId of taskIds) {
-      try {
-        let result;
+    // Use transaction for atomicity
+    return await this.dataSource.transaction(async (manager) => {
+      const results = [];
+      const userIds = new Set<string>();
 
-        if (action === BatchAction.COMPLETE) {
-          // Update task status to COMPLETED
-          const task = await this.findOne(taskId);
-          task.status = TaskStatus.COMPLETED;
-          result = await this.tasksRepository.save(task);
+      for (const taskId of taskIds) {
+        try {
+          let result;
 
-          // Add to queue for status update
-          await this.taskQueue.add('task-status-update', {
-            taskId: task.id,
-            status: task.status,
+          if (action === BatchAction.COMPLETE) {
+            const task = await manager.findOne(Task, {
+              where: { id: taskId },
+              relations: ['user'],
+            });
+
+            if (!task) {
+              throw new NotFoundException(`Task with ID ${taskId} not found`);
+            }
+
+            task.status = TaskStatus.COMPLETED;
+            result = await manager.save(task);
+            userIds.add(task.userId);
+
+            await this.taskQueue.add('task-status-update', {
+              taskId: task.id,
+              status: task.status,
+            });
+          } else if (action === BatchAction.DELETE) {
+            const task = await manager.findOne(Task, {
+              where: { id: taskId },
+            });
+
+            if (!task) {
+              throw new NotFoundException(`Task with ID ${taskId} not found`);
+            }
+
+            userIds.add(task.userId);
+            await manager.remove(task);
+            result = { id: taskId, deleted: true };
+          }
+
+          results.push({
+            taskId,
+            success: true,
+            result,
           });
-        } else if (action === BatchAction.DELETE) {
-          // Delete the task
-          await this.remove(taskId);
-          result = { id: taskId, deleted: true };
+        } catch (error) {
+          results.push({
+            taskId,
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
         }
-
-        results.push({
-          taskId,
-          success: true,
-          result,
-        });
-      } catch (error) {
-        results.push({
-          taskId,
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        });
       }
-    }
 
-    return {
-      processed: taskIds.length,
-      successful: results.filter(r => r.success).length,
-      failed: results.filter(r => !r.success).length,
-      results,
-    };
+      // Invalidate cache for all affected users
+      for (const userId of userIds) {
+        await this.cacheService.invalidateUserCache(userId);
+      }
+
+      return {
+        processed: taskIds.length,
+        successful: results.filter(r => r.success).length,
+        failed: results.filter(r => !r.success).length,
+        results,
+      };
+    });
   }
 }

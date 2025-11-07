@@ -4,34 +4,34 @@ import { tap } from 'rxjs/operators';
 
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
-  private readonly logger = new Logger(LoggingInterceptor.name);
+  private readonly logger = new Logger('HTTP');
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
-    // TODO: Implement comprehensive request/response logging
-    // This interceptor should:
-    // 1. Log incoming requests with relevant details
-    // 2. Measure and log response time
-    // 3. Log outgoing responses
-    // 4. Include contextual information like user IDs when available
-    // 5. Avoid logging sensitive information
+    const request = context.switchToHttp().getRequest();
+    const { method, url, ip } = request;
+    const userAgent = request.get('user-agent') || '';
+    const userId = request.user?.id || 'anonymous';
 
-    const req = context.switchToHttp().getRequest();
-    const method = req.method;
-    const url = req.url;
     const now = Date.now();
-
-    // Basic implementation (to be enhanced by candidates)
-    this.logger.log(`Request: ${method} ${url}`);
 
     return next.handle().pipe(
       tap({
-        next: (val) => {
-          this.logger.log(`Response: ${method} ${url} ${Date.now() - now}ms`);
+        next: () => {
+          const response = context.switchToHttp().getResponse();
+          const { statusCode } = response;
+          const responseTime = Date.now() - now;
+
+          this.logger.log(
+            `${method} ${url} ${statusCode} ${responseTime}ms - ${userId} - ${ip} - ${userAgent}`,
+          );
         },
-        error: (err) => {
-          this.logger.error(`Error in ${method} ${url} ${Date.now() - now}ms: ${err.message}`);
+        error: (error) => {
+          const responseTime = Date.now() - now;
+          this.logger.error(
+            `${method} ${url} ${error.status || 500} ${responseTime}ms - ${userId} - ${ip} - ${error.message}`,
+          );
         },
       }),
     );
   }
-} 
+}

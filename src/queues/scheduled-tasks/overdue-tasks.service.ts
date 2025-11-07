@@ -18,18 +18,10 @@ export class OverdueTasksService {
     private tasksRepository: Repository<Task>,
   ) {}
 
-  // TODO: Implement the overdue tasks checker
-  // This method should run every hour and check for overdue tasks
   @Cron(CronExpression.EVERY_HOUR)
   async checkOverdueTasks() {
     this.logger.debug('Checking for overdue tasks...');
-    
-    // TODO: Implement overdue tasks checking logic
-    // 1. Find all tasks that are overdue (due date is in the past)
-    // 2. Add them to the task processing queue
-    // 3. Log the number of overdue tasks found
-    
-    // Example implementation (incomplete - to be implemented by candidates)
+
     const now = new Date();
     const overdueTasks = await this.tasksRepository.find({
       where: {
@@ -39,10 +31,49 @@ export class OverdueTasksService {
     });
     
     this.logger.log(`Found ${overdueTasks.length} overdue tasks`);
-    
-    // Add tasks to the queue to be processed
-    // TODO: Implement adding tasks to the queue
-    
-    this.logger.debug('Overdue tasks check completed');
+
+    if (overdueTasks.length === 0) {
+      this.logger.debug('No overdue tasks found');
+      return;
+    }
+
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (const task of overdueTasks) {
+      try {
+        await this.taskQueue.add(
+          'overdue-tasks-notification',
+          {
+            taskId: task.id,
+            userId: task.userId,
+            title: task.title,
+            dueDate: task.dueDate,
+          },
+          {
+            attempts: 3,
+            backoff: {
+              type: 'exponential',
+              delay: 2000,
+            },
+            removeOnComplete: {
+              age: 3600,
+            },
+            removeOnFail: {
+              age: 86400,
+            },
+          },
+        );
+        successCount++;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        this.logger.error(`Failed to queue task ${task.id}: ${errorMessage}`);
+        failureCount++;
+      }
+    }
+
+    this.logger.log(
+      `Queued ${successCount} overdue tasks successfully, ${failureCount} failed`,
+    );
   }
 } 

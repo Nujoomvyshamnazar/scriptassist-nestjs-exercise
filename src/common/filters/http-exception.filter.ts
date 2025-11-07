@@ -1,36 +1,61 @@
-import { ExceptionFilter, Catch, ArgumentsHost, HttpException, Logger } from '@nestjs/common';
+import {
+  ExceptionFilter,
+  Catch,
+  ArgumentsHost,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
 import { Request, Response } from 'express';
+import { v4 as uuidv4 } from 'uuid';
 
-@Catch(HttpException)
+@Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
 
-  catch(exception: HttpException, host: ArgumentsHost) {
+  catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
-    const status = exception.getStatus();
-    const exceptionResponse = exception.getResponse();
 
-    // TODO: Implement comprehensive error handling
-    // This filter should:
-    // 1. Log errors appropriately based on their severity
-    // 2. Format error responses in a consistent way
-    // 3. Include relevant error details without exposing sensitive information
-    // 4. Handle different types of errors with appropriate status codes
+    const trackingId = uuidv4();
+
+    let status = HttpStatus.INTERNAL_SERVER_ERROR;
+    let message = 'Internal server error';
+    let code = 'INTERNAL_SERVER_ERROR';
+
+    if (exception instanceof HttpException) {
+      status = exception.getStatus();
+      const exceptionResponse = exception.getResponse();
+
+      if (typeof exceptionResponse === 'string') {
+        message = exceptionResponse;
+      } else if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
+        const responseObj = exceptionResponse as any;
+        message = responseObj.message || message;
+        code = responseObj.error || exception.constructor.name;
+      }
+    } else if (exception instanceof Error) {
+      message = exception.message;
+      code = exception.name;
+    }
+
+    const errorResponse = {
+      success: false,
+      error: {
+        code,
+        message,
+        trackingId,
+      },
+      timestamp: new Date().toISOString(),
+      path: request.url,
+    };
 
     this.logger.error(
-      `HTTP Exception: ${exception.message}`,
-      exception.stack,
+      `[${trackingId}] ${request.method} ${request.url} - ${status} - ${message}`,
+      exception instanceof Error ? exception.stack : undefined,
     );
 
-    // Basic implementation (to be enhanced by candidates)
-    response.status(status).json({
-      success: false,
-      statusCode: status,
-      message: exception.message,
-      path: request.url,
-      timestamp: new Date().toISOString(),
-    });
+    response.status(status).json(errorResponse);
   }
-} 
+}

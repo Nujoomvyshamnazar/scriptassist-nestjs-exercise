@@ -4,11 +4,12 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { getQueueToken } from '@nestjs/bullmq';
 import { Task } from './entities/task.entity';
 import { User } from '../users/entities/user.entity';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { Repository, SelectQueryBuilder, DataSource } from 'typeorm';
 import { Queue } from 'bullmq';
 import { TaskStatus } from './enums/task-status.enum';
 import { TaskPriority } from './enums/task-priority.enum';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { CacheService } from '../../common/cache/cache.service';
 
 describe('TasksService', () => {
   let service: TasksService;
@@ -79,6 +80,28 @@ describe('TasksService', () => {
           provide: getQueueToken('task-processing'),
           useValue: {
             add: jest.fn(),
+          },
+        },
+        {
+          provide: CacheService,
+          useValue: {
+            get: jest.fn().mockResolvedValue(null),
+            set: jest.fn().mockResolvedValue(undefined),
+            del: jest.fn().mockResolvedValue(undefined),
+            delPattern: jest.fn().mockResolvedValue(undefined),
+            invalidateUserCache: jest.fn().mockResolvedValue(undefined),
+            invalidateTaskCache: jest.fn().mockResolvedValue(undefined),
+            generateCacheKey: jest.fn((prefix, params) => `${prefix}:${JSON.stringify(params)}`),
+          },
+        },
+        {
+          provide: DataSource,
+          useValue: {
+            transaction: jest.fn((cb) => cb({
+              findOne: jest.fn(),
+              save: jest.fn(),
+              remove: jest.fn(),
+            })),
           },
         },
       ],
@@ -186,18 +209,16 @@ describe('TasksService', () => {
 
   describe('findOne', () => {
     it('should return a task by id', async () => {
-      tasksRepository.count.mockResolvedValue(1);
       tasksRepository.findOne.mockResolvedValue(mockTask);
 
       const result = await service.findOne('1');
 
       expect(result).toEqual(mockTask);
-      expect(tasksRepository.count).toHaveBeenCalledWith({ where: { id: '1' } });
       expect(tasksRepository.findOne).toHaveBeenCalledWith({ where: { id: '1' }, relations: ['user'] });
     });
 
     it('should throw NotFoundException if task not found', async () => {
-      tasksRepository.count.mockResolvedValue(0);
+      tasksRepository.findOne.mockResolvedValue(null);
 
       await expect(service.findOne('nonexistent')).rejects.toThrow(NotFoundException);
       await expect(service.findOne('nonexistent')).rejects.toThrow('Task with ID nonexistent not found');
